@@ -20,18 +20,13 @@ bot.command('stats', async (ctx) => {
     if (ctx.from.id !== MY_ID) return;
     const stats = brain.getStats();
     await ctx.reply(`
-📊 **Статистика**
-━━━━━━━━━━
+📊 **Статистика ИИ**
+━━━━━━━━━━━━━━━━
 🧠 Обучений: ${stats.learned}
 📝 Символов: ${stats.totalCharsProcessed}
 📚 База знаний: ${stats.knowledgeSize} фраз
+🤖 Автообучение: ${brain.stats.autoLearn ? 'Вкл' : 'Выкл'}
     `);
-});
-
-bot.command('think', async (ctx) => {
-    if (ctx.from.id !== MY_ID) return;
-    const mode = brain.toggleThinkingMode();
-    await ctx.reply(mode ? '🤔 Режим думания ВКЛ' : '⚡ Режим думания ВЫКЛ');
 });
 
 bot.on('text', async (ctx) => {
@@ -41,7 +36,7 @@ bot.on('text', async (ctx) => {
     
     // Ссылки
     if (text.match(/https?:\/\/[^\s]+/g)) {
-        const msg = await ctx.reply('📖 Обрабатываю ссылку...');
+        const msg = await ctx.reply('📖 Обрабатываю...');
         const urls = text.match(/https?:\/\/[^\s]+/g);
         let success = false;
         for (let url of urls) {
@@ -49,27 +44,25 @@ bot.on('text', async (ctx) => {
             if (ok) success = true;
         }
         await ctx.telegram.editMessageText(msg.chat.id, msg.message_id, null, 
-            success ? '✅ Ссылка обработана!' : '❌ Не удалось');
+            success ? '✅ Обработано' : '❌ Ошибка');
         return;
     }
     
     // Обучаемся
     brain.learnFromText(text, "user");
     
-    // Печатает...
+    // Генерируем ответ (ЧИСТЫЙ ИИ, БЕЗ КОСТЫЛЕЙ)
     await ctx.sendChatAction('typing');
+    await brain.sleep(1500);
     
-    // Думаем
-    if (brain.stats.thinkingMode) {
-        await brain.sleep(1000);
-    }
-    
-    // ВАЖНО: вызываем УМНЫЙ ответ, а не генерацию!
-    const answer = brain.generateSmartResponse(text);
-    
-    await ctx.reply(answer);
+    const answer = brain.generate(120);
+    await ctx.reply(answer || "...");
 });
 
-bot.launch().then(() => console.log('🚀 Бот запущен'));
+bot.launch().then(() => {
+    console.log('🚀 АВТОНОМНЫЙ ИИ ЗАПУЩЕН');
+    console.log('🤖 Бот сам читает интернет каждые 30 минут');
+});
+
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
