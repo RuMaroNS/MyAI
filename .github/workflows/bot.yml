@@ -1,30 +1,55 @@
-name: Infinite AI
-on: [push, workflow_dispatch]
+name: Bot Runner
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: # Позволяет запускать вручную
+  schedule:
+    - cron: '0 * * * *' # Запасной вариант: запускается каждый час
+
 jobs:
   run:
     runs-on: ubuntu-latest
+    
+    # Права для записи файлов и управления воркфлоу
     permissions:
       contents: write
+      actions: write 
+    
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '24' }
-      - run: npm install
-      - name: Run Bot and Push Memory
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Bot and Restart Loop
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         run: |
+          # 1. Запускаем бота в фоне
           node bot.js &
-          # Ждем 2 часа 50 минут перед перезапуском
-          sleep 10200
-          # Сохраняем память в репозиторий
-          git config user.name "AI"
+          
+          # 2. Ждем 2 часа (7200 секунд)
+          echo "Бот запущен, ждем 2 часа..."
+          sleep 7200
+          
+          # 3. Сохраняем память в репозиторий
+          git config user.name "AI-Brain"
           git config user.email "ai@bot"
           git add memory.json
-          git commit -m "update memory"
+          git commit -m "Update memory.json" || echo "No changes to commit"
           git push
-          # Перезапускаем цикл
+          
+          # 4. Перезапускаем самого себя через API
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
           https://api.github.com/repos/${{ github.repository }}/actions/workflows/bot.yml/dispatches \
           -d '{"ref":"main"}'
-
+          
