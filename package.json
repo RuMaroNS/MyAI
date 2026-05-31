@@ -2,9 +2,14 @@
   "name": "ai-bot",
   "version": "1.0.0",
   "main": "bot.js",
+  "scripts": {
+    "start": "node bot.js",
+    "dev": "nodemon bot.js"
+  },
   "dependencies": {
     "telegraf": "^4.16.0",
     "axios": "^1.7.0",
-    "cheerio": "^1.0.0"
+    "cheerio": "^1.0.0",
+    "nodemon": "^3.1.0"
   }
 }
