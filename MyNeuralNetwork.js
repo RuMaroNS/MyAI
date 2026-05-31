@@ -563,8 +563,6 @@ class MyNeuralNetwork {
                 nextH[i] = Math.tanh(sum);
             }
             h = nextH;
-
-            const y = new A
             const y = new Array(this.outputSize);
             for (let i = 0; i < this.outputSize; i++) {
                 let sum = this.by[i];
