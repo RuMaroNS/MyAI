@@ -1,44 +1,49 @@
 const fs = require('fs');
-const axios = require('axios');
-const cheerio = require('cheerio');
 
 class Brain {
     constructor() {
         this.memoryFile = 'memory.json';
+        this.init();
+    }
+
+    init() {
+        if (!fs.existsSync(this.memoryFile)) {
+            fs.writeFileSync(this.memoryFile, JSON.stringify({ chain: {} }));
+        }
     }
 
     load() {
-        if (!fs.existsSync(this.memoryFile)) return { words: [], history: [] };
-        return JSON.parse(fs.readFileSync(this.memoryFile));
+        return JSON.parse(fs.readFileSync(this.memoryFile, 'utf8'));
     }
 
-    save(data) {
+    learn(text) {
+        const data = this.load();
+        const words = text.toLowerCase().match(/\b\w+\b/g) || [];
+        for (let i = 0; i < words.length - 1; i++) {
+            const current = words[i];
+            const next = words[i + 1];
+            if (!data.chain[current]) data.chain[current] = [];
+            data.chain[current].push(next);
+        }
         fs.writeFileSync(this.memoryFile, JSON.stringify(data, null, 2));
     }
 
-    async think(input) {
-        let memory = this.load();
-        memory.history.push(input);
+    // Генерация предложения без промптов, просто связи слов
+    generate(startWord) {
+        const data = this.load();
+        const keys = Object.keys(data.chain);
+        if (keys.length === 0) return "Я еще учусь...";
+        
+        let current = startWord && data.chain[startWord] ? startWord : keys[Math.floor(Math.random() * keys.length)];
+        let result = [current];
 
-        // Если ссылка - парсим и добавляем слова в память
-        if (input.startsWith('http')) {
-            try {
-                const { data } = await axios.get(input, { timeout: 10000 });
-                const $ = cheerio.load(data);
-                const text = $('body').text().toLowerCase();
-                const newWords = text.match(/\b(\w+){3,}\b/g) || [];
-                
-                newWords.forEach(w => {
-                    if (!memory.words.includes(w)) memory.words.push(w);
-                });
-            } catch (e) {
-                memory.history.push("Ошибка чтения ссылки: " + e.message);
-            }
+        for (let i = 0; i < 8; i++) {
+            const nextWords = data.chain[current];
+            if (!nextWords) break;
+            current = nextWords[Math.floor(Math.random() * nextWords.length)];
+            result.push(current);
         }
-
-        this.save(memory);
-        return `Я записал. Теперь в памяти ${memory.words.length} уникальных слов.`;
+        return result.join(' ');
     }
 }
 module.exports = new Brain();
-
