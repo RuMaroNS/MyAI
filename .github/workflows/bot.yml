@@ -1,28 +1,30 @@
-name: Infinite Bot
-on:
-  push:
-  workflow_dispatch:
-  schedule:
-    - cron: '0 * * * *' # Запускается каждый час, чтобы «подхватить», если упал
-
+name: Infinite AI
+on: [push, workflow_dispatch]
 jobs:
   run:
     runs-on: ubuntu-latest
     permissions:
-      actions: write
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '24' }
       - run: npm install
-      # Запускаем бота в фоновом режиме на 50 минут, потом убиваем
-      - env:
+      - name: Run Bot and Push Memory
+        env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
         run: |
           node bot.js &
-          sleep 3300 
+          # Ждем 2 часа 50 минут перед перезапуском
+          sleep 10200
+          # Сохраняем память в репозиторий
+          git config user.name "AI"
+          git config user.email "ai@bot"
+          git add memory.json
+          git commit -m "update memory"
+          git push
+          # Перезапускаем цикл
           curl -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-          -H "Accept: application/vnd.github.v3+json" \
           https://api.github.com/repos/${{ github.repository }}/actions/workflows/bot.yml/dispatches \
           -d '{"ref":"main"}'
+
