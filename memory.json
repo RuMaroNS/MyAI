@@ -1,0 +1,38 @@
+{
+  "chain": {
+    "привет": [
+      "сынок"
+    ],
+    "как": [
+      "дела",
+      "школа"
+    ],
+    "https": [
+      "nsportal"
+    ],
+    "nsportal": [
+      "blog"
+    ],
+    "blog": [
+      "nachalnaya"
+    ],
+    "nachalnaya": [
+      "shkola"
+    ],
+    "shkola": [
+      "all"
+    ],
+    "all": [
+      "slovarnye"
+    ],
+    "slovarnye": [
+      "slova"
+    ]
+  },
+  "name": "Малыш",
+  "stats": {
+    "learned": 37,
+    "lastActivity": 1780225022189,
+    "boredom": 0.05341777777777778
+  }
+}
