@@ -176,6 +176,19 @@ class MyNeuralNetwork {
     }
     console.log(`📖 Словарь: ${this.vocabSize} символов`);
   }
+
+  // Добавь это в buildVocab или при создании сети
+const alphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяabcdefghijklmnopqrstuvwxyz0123456789 .,!?";
+for(let char of alphabet) {
+    if(this.charToIdx[char] === undefined) {
+        let idx = Object.keys(this.charToIdx).length;
+        if(idx < this.inputSize) {
+            this.charToIdx[char] = idx;
+            this.idxToChar[idx] = char;
+        }
+    }
+}
+  
   
   // ГЕНЕРАЦИЯ ТЕКСТА (как ребёнок)
   generate(prompt = '', length = 50) {
