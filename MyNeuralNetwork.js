@@ -14,6 +14,7 @@ class MyNeuralNetwork {
         this.weightsFile = 'network_weights.json';
         this.memoryFile = 'brain_memory.json';
         this.knowledgeFile = 'knowledge_base.json';
+        this.urlsFile = 'urls_to_read.json';
 
         // --- МАТРИЦЫ ---
         this.Wxh = null;
@@ -47,20 +48,115 @@ class MyNeuralNetwork {
             lastLoss: 0,
             lastActivity: Date.now(),
             boredom: 0,
-            thinkingMode: true
+            autoLearn: true
         };
 
-        // --- РЕЖИМ ДУМАНИЯ ---
-        this.thinkingTime = 2000;
-        this.lastThinkTime = 0;
-
+        this.urlsQueue = [];
+        
         this.initAlphabet();
         this.initNetwork();
         this.loadKnowledgeBase();
+        this.loadUrlsQueue();
+        this.startAutoLearning();
     }
 
     // ==========================================
-    // СТАТИСТИКА И РЕЖИМЫ (ПРАВИЛЬНОЕ МЕСТО)
+    // АЛФАВИТ
+    // ==========================================
+
+    initAlphabet() {
+        const alphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяabcdefghijklmnopqrstuvwxyz0123456789 .,!?-";
+        const chars = Array.from(new Set(alphabet.split('')));
+        this.vocabSize = Math.min(chars.length, this.inputSize);
+
+        for (let i = 0; i < this.vocabSize; i++) {
+            this.charToIdx[chars[i]] = i;
+            this.idxToChar[i] = chars[i];
+        }
+        
+        console.log(`📚 Алфавит: ${this.vocabSize} символов`);
+    }
+
+    // ==========================================
+    // АВТОНОМНОЕ ОБУЧЕНИЕ
+    // ==========================================
+
+    loadUrlsQueue() {
+        if (fs.existsSync(this.urlsFile)) {
+            try {
+                this.urlsQueue = JSON.parse(fs.readFileSync(this.urlsFile, 'utf8'));
+            } catch(e) { 
+                this.urlsQueue = []; 
+            }
+        } else {
+            this.initDefaultUrls();
+        }
+    }
+
+    initDefaultUrls() {
+        this.urlsQueue = [
+            'https://ru.wikipedia.org/wiki/Искусственный_интеллект',
+            'https://ru.wikipedia.org/wiki/Нейронная_сеть',
+            'https://ru.wikipedia.org/wiki/Машинное_обучение',
+            'https://ria.ru/',
+            'https://lenta.ru/rss/news',
+            'https://habr.com/ru/all/',
+            'https://tass.ru/',
+            'https://www.vesti.ru/'
+        ];
+        this.saveUrlsQueue();
+    }
+
+    saveUrlsQueue() {
+        fs.writeFileSync(this.urlsFile, JSON.stringify(this.urlsQueue, null, 2));
+    }
+
+    startAutoLearning() {
+        console.log('🤖 ЗАПУЩЕНО АВТОНОМНОЕ ОБУЧЕНИЕ...');
+        
+        setInterval(async () => {
+            if (this.stats.autoLearn && this.urlsQueue.length > 0) {
+                await this.autoReadNextUrl();
+            }
+        }, 30 * 60 * 1000);
+    }
+
+    async autoReadNextUrl() {
+        if (this.urlsQueue.length === 0) return;
+        
+        const url = this.urlsQueue.shift();
+        this.saveUrlsQueue();
+        
+        console.log(`🌐 АВТОЧТЕНИЕ: ${url}`);
+        const success = await this.readUrl(url);
+        
+        if (success) {
+            console.log('✅ Автообучение успешно');
+            await this.extractUrlsFromText();
+        }
+    }
+
+    async extractUrlsFromText() {
+        const allText = Object.keys(this.knowledgeBase).join(' ');
+        const urlPattern = /https?:\/\/[^\s<>"']+/g;
+        const foundUrls = allText.match(urlPattern) || [];
+        
+        let newUrls = 0;
+        for (let url of foundUrls) {
+            if (!this.urlsQueue.includes(url)) {
+                this.urlsQueue.push(url);
+                newUrls++;
+            }
+        }
+        
+        if (newUrls > 0) {
+            console.log(`🔗 Найдено ${newUrls} новых ссылок`);
+            this.saveUrlsQueue();
+        }
+    }
+
+    // ==========================================
+    // СТАТИСТИКА
     // ==========================================
 
     getStats() {
@@ -74,44 +170,16 @@ class MyNeuralNetwork {
         };
     }
 
-    toggleThinkingMode() {
-        this.stats.thinkingMode = !this.stats.thinkingMode;
-        this.saveStats();
-        return this.stats.thinkingMode;
-    }
-
-    // ==========================================
-    // АЛФАВИТ
-    // ==========================================
-
-    initAlphabet() {
-        const alphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяabcdefghijklmnopqrstuvwxyz0123456789 .,!?-\"\':;()[]{}@#$%^&*+=/\\|~`\n";
-        const chars = Array.from(new Set(alphabet.split('')));
-        this.vocabSize = Math.min(chars.length, this.inputSize);
-
-        for (let i = 0; i < this.vocabSize; i++) {
-            this.charToIdx[chars[i]] = i;
-            this.idxToChar[i] = chars[i];
-        }
-        
-        console.log(`📚 Алфавит: ${this.vocabSize} символов`);
-    }
-
     // ==========================================
     // СБРОС ПАМЯТИ
     // ==========================================
 
     resetMemory() {
-        console.log("🧹 ПРОИЗВОДИТСЯ ПОЛНАЯ ОЧИСТКА ПАМЯТИ...");
+        console.log("🧹 ПОЛНАЯ ОЧИСТКА ПАМЯТИ...");
         
-        if (fs.existsSync(this.weightsFile)) {
-            fs.unlinkSync(this.weightsFile);
-        }
-        if (fs.existsSync(this.memoryFile)) {
-            fs.unlinkSync(this.memoryFile);
-        }
-        if (fs.existsSync(this.knowledgeFile)) {
-            fs.unlinkSync(this.knowledgeFile);
+        const files = [this.weightsFile, this.memoryFile, this.knowledgeFile, this.urlsFile];
+        for (let file of files) {
+            if (fs.existsSync(file)) fs.unlinkSync(file);
         }
         
         this.stats = {
@@ -120,14 +188,14 @@ class MyNeuralNetwork {
             lastLoss: 0,
             lastActivity: Date.now(),
             boredom: 0,
-            thinkingMode: true
+            autoLearn: true
         };
         
         this.knowledgeBase = {};
         this.createNewNetwork();
+        this.initDefaultUrls();
         
-        console.log("✨ ПАМЯТЬ ПОЛНОСТЬЮ ОЧИЩЕНА!");
-        return "🧠 Память полностью очищена! Я начинаю обучение с нуля.";
+        return "🧠 Память очищена! Начинаю автономное обучение.";
     }
 
     initNetwork() {
@@ -220,78 +288,8 @@ class MyNeuralNetwork {
         this.learn(cleanText, 15);
         this.saveKnowledgeBase();
         
+        console.log(`📖 Выучено: ${text.length} символов от ${source}`);
         return true;
-    }
-
-    // ==========================================
-    // РЕЖИМ ДУМАНИЯ
-    // ==========================================
-
-    async think(question) {
-        if (!this.stats.thinkingMode) {
-            return this.generateAnswer(question);
-        }
-        
-        console.log("🤔 Мозг анализирует запрос...");
-        
-        const complexity = Math.min(question.length / 50, 3);
-        const thinkDelay = this.thinkingTime * (0.5 + complexity);
-        
-        await this.sleep(thinkDelay);
-        
-        const answer = this.generateAnswer(question);
-        
-        console.log(`💭 Думал ${(thinkDelay/1000).toFixed(1)} секунд`);
-        return answer;
-    }
-
-    generateAnswer(question) {
-        const words = question.toLowerCase().split(/\s+/);
-        for (let i = 0; i < words.length - 2; i++) {
-            const phrase = words.slice(i, i + 3).join(' ');
-            if (this.knowledgeBase[phrase] && this.knowledgeBase[phrase].count > 2) {
-                return this.generateFromPattern(phrase);
-            }
-        }
-        
-        return this.generate(100);
-    }
-
-    generateFromPattern(phrase) {
-        const pattern = this.knowledgeBase[phrase];
-        if (!pattern) return this.generate(80);
-        
-        let result = phrase;
-        let current = phrase;
-        
-        for (let i = 0; i < 15; i++) {
-            if (!this.knowledgeBase[current]) break;
-            const nextWords = this.knowledgeBase[current].next;
-            if (Object.keys(nextWords).length === 0) break;
-            
-            const total = Object.values(nextWords).reduce((a, b) => a + b, 0);
-            let rand = Math.random() * total;
-            let selected = '';
-            for (const [word, count] of Object.entries(nextWords)) {
-                rand -= count;
-                if (rand <= 0) {
-                    selected = word;
-                    break;
-                }
-            }
-            
-            if (selected) {
-                result += ' ' + selected;
-                const words = result.split(' ');
-                current = words.slice(-3).join(' ');
-            }
-        }
-        
-        return result;
-    }
-
-    sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     // ==========================================
@@ -546,12 +544,12 @@ class MyNeuralNetwork {
     // ГЕНЕРАЦИЯ ТЕКСТА
     // ==========================================
 
-    generate(length = 80) {
+    generate(length = 120) {
         let h = new Array(this.hiddenSize).fill(0);
         let currentIdx = Math.floor(Math.random() * this.vocabSize);
         let result = "";
         
-        const temperature = 0.65;
+        const temperature = 0.6;
 
         for (let t = 0; t < length; t++) {
             const nextH = new Array(this.hiddenSize);
@@ -563,6 +561,7 @@ class MyNeuralNetwork {
                 nextH[i] = Math.tanh(sum);
             }
             h = nextH;
+
             const y = new Array(this.outputSize);
             for (let i = 0; i < this.outputSize; i++) {
                 let sum = this.by[i];
@@ -603,9 +602,6 @@ class MyNeuralNetwork {
         if (out.length > 0) {
             out = out.charAt(0).toUpperCase() + out.slice(1);
         }
-        if (!out.match(/[.!?]$/)) {
-            out += '.';
-        }
         return out;
     }
 
@@ -615,7 +611,7 @@ class MyNeuralNetwork {
 
     async readUrl(url) {
         try {
-            console.log(`🌐 Парсинг URL: ${url}`);
+            console.log(`🌐 Парсинг: ${url}`);
             const response = await axios.get(url, { 
                 timeout: 10000,
                 headers: {
@@ -629,7 +625,6 @@ class MyNeuralNetwork {
             text = text.substring(0, 2000);
             
             if (text.length < 50) {
-                console.log("⚠️ Слишком мало текста");
                 return false;
             }
             
@@ -681,66 +676,14 @@ class MyNeuralNetwork {
         }
     }
 
-        resetBoredom() {
+    resetBoredom() {
         this.stats.boredom = 0;
         this.stats.lastActivity = Date.now();
         this.saveStats();
     }
 
-    // ==========================================
-    // УМНЫЙ ОТВЕТ НА ВОПРОСЫ (внутри класса!)
-    // ==========================================
-
-    generateSmartResponse(question) {
-        const q = question.toLowerCase();
-        
-        if (q.includes('как дела') || q.includes('как сам') || q.includes('как ты')) {
-            return this.getRandomResponse(['Хорошо, а у тебя?', 'Нормально, спасибо!', 'Отлично! Как сам?', 'Всё пучком!']);
-        }
-        
-        if (q.includes('кто ты') || q.includes('твое имя') || q.includes('зовут')) {
-            return this.getRandomResponse(['Я нейросетевой бот', 'Меня зовут AI Bot', 'Я твой виртуальный друг']);
-        }
-        
-        if (q.includes('спасибо') || q.includes('благодарю')) {
-            return 'Пожалуйста! Обращайся :)';
-        }
-        
-        if (q.includes('привет') || q.includes('здравствуй') || q.includes('хай')) {
-            return this.getRandomResponse(['Привет!', 'Здравствуй!', 'Хай!', 'Приветствую!']);
-        }
-        
-        if (q.includes('пока') || q.includes('до свидания') || q.includes('увидимся')) {
-            return 'Пока! Было приятно пообщаться!';
-        }
-        
-        if (q.includes('что ты умеешь')) {
-            return 'Я умею учиться на текстах, парсить ссылки и отвечать на вопросы! Напиши /help чтобы узнать больше.';
-        }
-        
-        const words = q.split(/\s+/);
-        for (let i = 0; i < words.length - 1; i++) {
-            const phrase = words.slice(i, i + 2).join(' ');
-            if (this.knowledgeBase[phrase]) {
-                return this.generateFromPattern(phrase);
-            }
-        }
-        
-        const generated = this.generate(50);
-        if (generated.length > 5) {
-            return generated;
-        }
-        
-        return this.getRandomResponse([
-            'Интересный вопрос... Продолжай, я учусь!',
-            'Я пока не совсем понял, но стараюсь!',
-            'Расскажи ещё что-нибудь, я научусь отвечать лучше.',
-            'Мой мозг ещё маленький, но я расту!'
-        ]);
-    }
-
-    getRandomResponse(responses) {
-        return responses[Math.floor(Math.random() * responses.length)];
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
 
