@@ -565,3 +565,129 @@ class MyNeuralNetwork {
             h = nextH;
 
             const y = new A
+            const y = new Array(this.outputSize);
+            for (let i = 0; i < this.outputSize; i++) {
+                let sum = this.by[i];
+                for (let j = 0; j < this.hiddenSize; j++) {
+                    sum += this.Why[i][j] * h[j];
+                }
+                y[i] = sum;
+            }
+
+            const softProbs = this.getTemperatureSoftmax(y, temperature);
+            currentIdx = this.sampleFromDistribution(softProbs);
+            result += (this.idxToChar[currentIdx] || ' ');
+        }
+
+        return this.postProcessText(result);
+    }
+
+    getTemperatureSoftmax(y, temp) {
+        const scaled = y.map(val => val / temp);
+        let max = Math.max(...scaled);
+        const exps = scaled.map(val => Math.exp(val - max));
+        const sum = exps.reduce((a, b) => a + b, 0);
+        return exps.map(e => e / sum);
+    }
+
+    sampleFromDistribution(probs) {
+        let r = Math.random();
+        let cumulative = 0;
+        for (let i = 0; i < probs.length; i++) {
+            cumulative += probs[i];
+            if (r <= cumulative) return i;
+        }
+        return probs.length - 1;
+    }
+
+    postProcessText(text) {
+        let out = text.trim().replace(/\s+/g, ' ');
+        if (out.length > 0) {
+            out = out.charAt(0).toUpperCase() + out.slice(1);
+        }
+        if (!out.match(/[.!?]$/)) {
+            out += '.';
+        }
+        return out;
+    }
+
+    // ==========================================
+    // ПАРСИНГ ССЫЛОК
+    // ==========================================
+
+    async readUrl(url) {
+        try {
+            console.log(`🌐 Парсинг URL: ${url}`);
+            const response = await axios.get(url, { 
+                timeout: 10000,
+                headers: {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+            });
+            
+            let text = response.data;
+            text = text.replace(/<[^>]*>/g, ' ');
+            text = text.replace(/\s+/g, ' ').trim();
+            text = text.substring(0, 2000);
+            
+            if (text.length < 50) {
+                console.log("⚠️ Слишком мало текста");
+                return false;
+            }
+            
+            console.log(`📖 Извлечено ${text.length} символов`);
+            this.learnFromText(text, "url");
+            return true;
+            
+        } catch (error) {
+            console.error(`❌ Ошибка:`, error.message);
+            return false;
+        }
+    }
+
+    // ==========================================
+    // СОХРАНЕНИЕ И ЗАГРУЗКА
+    // ==========================================
+
+    save() {
+        const weights = {
+            Wxh: this.Wxh,
+            Whh: this.Whh,
+            Why: this.Why,
+            bh: this.bh,
+            by: this.by,
+            adamT: this.adam.t
+        };
+        fs.writeFileSync(this.weightsFile, JSON.stringify(weights));
+        this.saveStats();
+    }
+
+    saveStats() {
+        fs.writeFileSync(this.memoryFile, JSON.stringify({ stats: this.stats }, null, 2));
+    }
+
+    loadWeights() {
+        try {
+            const weights = JSON.parse(fs.readFileSync(this.weightsFile, 'utf8'));
+            this.Wxh = weights.Wxh;
+            this.Whh = weights.Whh;
+            this.Why = weights.Why;
+            this.bh = weights.bh;
+            this.by = weights.by;
+            this.adam.t = weights.adamT || 1;
+            this.initAdamCache();
+            console.log('🧠 Веса загружены');
+        } catch (e) {
+            console.error("Ошибка загрузки весов");
+            this.createNewNetwork();
+        }
+    }
+
+    resetBoredom() {
+        this.stats.boredom = 0;
+        this.stats.lastActivity = Date.now();
+        this.saveStats();
+    }
+}
+
+module.exports = new MyNeuralNetwork();
