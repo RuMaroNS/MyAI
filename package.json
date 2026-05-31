@@ -1,0 +1,8 @@
+{
+  "name": "ai-student",
+  "version": "1.0.0",
+  "main": "bot.js",
+  "dependencies": {
+    "telegraf": "^4.16.0"
+  }
+}
