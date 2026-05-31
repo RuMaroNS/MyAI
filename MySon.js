@@ -3,200 +3,226 @@ const axios = require('axios');
 
 class MySon {
     constructor() {
-        // Память (то что знает)
-        this.knowledge = {};
+        // ЧИСТАЯ НЕЙРОСЕТЬ (только связи между словами)
+        this.synapses = {};
         
-        // Контекст диалога
+        // Контекст (чистые сообщения, без обработки)
         this.context = [];
         
         this.stats = {
-            learned: 0,
-            searched: 0
+            words: 0,
+            searches: 0
         };
         
         this.load();
-        console.log('👶 Сын родился');
+        console.log('👶 Нейросеть запущена. Никаких шаблонов.');
     }
     
     save() {
-        fs.writeFileSync('son_memory.json', JSON.stringify({
-            knowledge: this.knowledge,
+        fs.writeFileSync('son_brain.json', JSON.stringify({
+            synapses: this.synapses,
             context: this.context,
             stats: this.stats
         }, null, 2));
     }
     
     load() {
-        if (fs.existsSync('son_memory.json')) {
+        if (fs.existsSync('son_brain.json')) {
             try {
-                const data = JSON.parse(fs.readFileSync('son_memory.json'));
-                this.knowledge = data.knowledge || {};
+                const data = JSON.parse(fs.readFileSync('son_brain.json'));
+                this.synapses = data.synapses || {};
                 this.context = data.context || [];
                 this.stats = data.stats || this.stats;
-                console.log(`📚 Знаю: ${Object.keys(this.knowledge).length} тем`);
             } catch(e) {}
         }
     }
     
-    // ========== ИЩЕТ В ИНТЕРНЕТЕ ТО, ЧЕГО НЕ ЗНАЕТ ==========
-    async searchAndLearn(question) {
-        const searchUrl = `https://ru.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(question)}`;
+    // ========== ОБУЧЕНИЕ (СТРОИТ СВЯЗИ) ==========
+    learn(text) {
+        const words = text.toLowerCase().split(/\s+/);
         
-        try {
-            const response = await axios.get(searchUrl, {
-                timeout: 8000,
-                headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
+        for (let i = 0; i < words.length - 1; i++) {
+            const current = words[i];
+            const next = words[i + 1];
             
-            if (response.data && response.data.extract) {
-                const answer = response.data.extract;
-                const title = response.data.title;
-                
-                // Сохраняем в память
-                this.knowledge[question.toLowerCase()] = {
-                    answer: answer.substring(0, 500),
-                    source: title,
-                    learnedAt: Date.now()
-                };
-                
-                this.stats.searched++;
-                this.save();
-                
-                console.log(`🔍 Сын выучил: ${question}`);
-                return answer;
+            if (!this.synapses[current]) {
+                this.synapses[current] = {};
             }
-        } catch(e) {
-            // Пробуем поискать через Яндекс (упрощенно)
-            try {
-                const yandexUrl = `https://yandex.ru/search/?text=${encodeURIComponent(question)}`;
-                const yandexRes = await axios.get(yandexUrl, { timeout: 8000 });
-                const match = yandexRes.data.match(/<div class="text-container typo typo_text_m">(.*?)<\/div>/);
-                if (match) {
-                    const answer = match[1].replace(/<[^>]*>/g, '');
-                    this.knowledge[question.toLowerCase()] = {
-                        answer: answer.substring(0, 500),
-                        source: 'yandex',
-                        learnedAt: Date.now()
-                    };
-                    this.save();
-                    return answer;
-                }
-            } catch(e2) {}
+            
+            this.synapses[current][next] = (this.synapses[current][next] || 0) + 1;
         }
         
+        this.stats.words = Object.keys(this.synapses).length;
+        this.save();
+    }
+    
+    // ========== ИЩЕТ В ИНТЕРНЕТЕ ==========
+    async search(query) {
+        try {
+            const response = await axios.get(
+                `https://ru.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(query)}`,
+                { timeout: 8000, headers: { 'User-Agent': 'Mozilla/5.0' } }
+            );
+            
+            if (response.data && response.data.extract) {
+                this.stats.searches++;
+                return response.data.extract;
+            }
+        } catch(e) {}
         return null;
     }
     
-    // ========== УЧИТСЯ ИЗ ССЫЛОК (которые кидаешь) ==========
-    async learnFromUrl(url) {
-        try {
-            const response = await axios.get(url, {
-                timeout: 15000,
-                headers: { 'User-Agent': 'Mozilla/5.0' }
-            });
+    // ========== ГЕНЕРАЦИЯ (ЧИСТЫЙ РАЗУМ, БЕЗ ШАБЛОНОВ) ==========
+    generate(startWord, maxLength = 60) {
+        if (Object.keys(this.synapses).length === 0) {
+            return null;
+        }
+        
+        let current = startWord;
+        let result = [current];
+        let safety = 0;
+        
+        while (result.length < maxLength && safety < 100) {
+            safety++;
             
-            let text = response.data;
-            text = text.replace(/<[^>]*>/g, ' ');
-            text = text.replace(/\s+/g, ' ').trim();
-            text = text.substring(0, 2000);
+            const connections = this.synapses[current];
+            if (!connections) break;
             
-            // Извлекаем ключевые понятия
-            const words = text.split(/\s+/);
-            let currentTopic = null;
+            // Вычисляем вероятности
+            let total = 0;
+            const options = [];
+            for (let [word, weight] of Object.entries(connections)) {
+                total += weight;
+                options.push({ word, weight });
+            }
             
-            for (let i = 0; i < words.length; i++) {
-                const word = words[i].toLowerCase();
-                if (word.length > 3 && !this.knowledge[word]) {
-                    // Берем предложение как ответ
-                    const sentence = words.slice(Math.max(0, i-5), Math.min(words.length, i+10)).join(' ');
-                    if (sentence.length > 20 && sentence.length < 300) {
-                        this.knowledge[word] = {
-                            answer: sentence,
-                            source: url,
-                            learnedAt: Date.now()
-                        };
-                        this.stats.learned++;
-                    }
+            // Случайный выбор с весами
+            let rand = Math.random() * total;
+            let nextWord = null;
+            for (let opt of options) {
+                rand -= opt.weight;
+                if (rand <= 0) {
+                    nextWord = opt.word;
+                    break;
                 }
             }
             
-            this.save();
-            console.log(`✅ Выучено из: ${url}`);
-            return true;
+            if (!nextWord) break;
             
-        } catch(e) {
-            console.log(`❌ Ошибка: ${url}`);
-            return false;
+            result.push(nextWord);
+            current = nextWord;
+            
+            // Останавливаемся на знаке препинания
+            if (nextWord.match(/[.!?]$/)) break;
         }
+        
+        return result.join(' ');
     }
     
-    // ========== ОТВЕЧАЕТ (сам ищет если не знает) ==========
-    async answer(question) {
-        // Добавляем в контекст
-        this.context.push(question);
-        if (this.context.length > 10) this.context.shift();
+    // ========== ГЛАВНЫЙ МОЗГ ==========
+    async think(input) {
+        // Запоминаем контекст
+        this.context.push(input);
+        if (this.context.length > 5) this.context.shift();
         
-        const cleanQ = question.toLowerCase();
+        // Учимся из ввода
+        this.learn(input);
         
-        // Ищем ключевые слова в вопросе
-        const questionWords = cleanQ.split(/\s+/);
-        let foundTopic = null;
-        let foundAnswer = null;
+        const cleanInput = input.toLowerCase();
+        const inputWords = cleanInput.split(/\s+/);
         
-        // Сначала проверяем что знаем
-        for (let word of questionWords) {
-            if (word.length > 2 && this.knowledge[word]) {
-                foundTopic = word;
-                foundAnswer = this.knowledge[word].answer;
+        // Пытаемся найти стартовое слово для генерации
+        let startWord = null;
+        
+        // Берем последнее значимое слово из вопроса
+        for (let i = inputWords.length - 1; i >= 0; i--) {
+            const word = inputWords[i];
+            if (this.synapses[word] && word.length > 2) {
+                startWord = word;
                 break;
             }
         }
         
-        // Если знает - отвечает
-        if (foundAnswer) {
-            // Делаем ответ естественным
-            let response = foundAnswer;
-            if (response.length > 300) {
-                response = response.substring(0, 300) + '...';
-            }
-            return response;
+        // Если нет связей - берем любое слово из памяти
+        if (!startWord && Object.keys(this.synapses).length > 0) {
+            const keys = Object.keys(this.synapses);
+            startWord = keys[Math.floor(Math.random() * keys.length)];
         }
         
-        // НЕ ЗНАЕТ - ИДЕТ В ИНТЕРНЕТ (молча, сам)
-        // Берем главное слово из вопроса
-        let searchTerm = questionWords.filter(w => w.length > 3)[0] || cleanQ;
+        // Пытаемся найти информацию в интернете
+        const searchTerm = inputWords.find(w => w.length > 3) || cleanInput;
+        const internetInfo = await this.search(searchTerm);
         
-        console.log(`🔍 Сын ищет: "${searchTerm}"`);
-        
-        const newKnowledge = await this.searchAndLearn(searchTerm);
-        
-        if (newKnowledge) {
-            // Ура, выучил! Теперь отвечает
-            let response = newKnowledge;
-            if (response.length > 350) {
-                response = response.substring(0, 350) + '...';
-            }
-            return response;
+        if (internetInfo) {
+            // Обучаемся из найденного
+            this.learn(internetInfo);
         }
         
-        // Если ничего не нашел - честно говорит что не знает (но предложит научить)
-        return "Я еще не знаю этого, папа. Кинь ссылку на тему или напиши сам — я запомню.";
+        // ГЕНЕРИРУЕМ ОТВЕТ (чистая генерация)
+        let answer = null;
+        
+        if (startWord) {
+            answer = this.generate(startWord, 50);
+        }
+        
+        // Если генерация не удалась - пробуем с другим словом
+        if (!answer || answer.length < 5) {
+            const fallbackWords = ['я', 'ты', 'он', 'она', 'это', 'так', 'ну', 'да', 'нет'];
+            for (let w of fallbackWords) {
+                if (this.synapses[w]) {
+                    answer = this.generate(w, 40);
+                    if (answer && answer.length > 5) break;
+                }
+            }
+        }
+        
+        // Если все равно нет - берем кусок из интернета
+        if ((!answer || answer.length < 5) && internetInfo) {
+            const sentences = internetInfo.split(/[.!?]/);
+            for (let s of sentences) {
+                if (s.length > 20 && s.length < 150) {
+                    answer = s.trim();
+                    break;
+                }
+            }
+            if (answer) {
+                answer = answer.charAt(0).toUpperCase() + answer.slice(1) + '.';
+            }
+        }
+        
+        // Последний шанс
+        if (!answer || answer.length < 3) {
+            answer = this.generate('я', 30);
+            if (!answer || answer.length < 3) {
+                answer = '...';
+            }
+        }
+        
+        // Обучаемся на своем ответе
+        this.learn(answer);
+        
+        // Форматируем
+        if (answer.charAt(0)) {
+            answer = answer.charAt(0).toUpperCase() + answer.slice(1);
+        }
+        
+        return answer;
     }
     
     // ========== КОМАНДЫ ==========
     reset() {
-        this.knowledge = {};
+        this.synapses = {};
         this.context = [];
-        this.stats = { learned: 0, searched: 0 };
+        this.stats = { words: 0, searches: 0 };
         this.save();
-        return "🧠 Память стерта. Я переродился. Учи меня, папа.";
+        return "🧠 Нейросеть перезапущена.";
     }
     
     getStats() {
         return {
-            topics: Object.keys(this.knowledge).length,
-            learned: this.stats.learned,
-            searched: this.stats.searched
+            words: this.stats.words,
+            searches: this.stats.searches,
+            context: this.context.length
         };
     }
 }
