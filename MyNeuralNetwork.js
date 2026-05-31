@@ -37,7 +37,7 @@ class MyNeuralNetwork {
         this.idxToChar = {};
         this.vocabSize = 0;
 
-        // --- БАЗА ЗНАНИЙ (для быстрых ответов) ---
+        // --- БАЗА ЗНАНИЙ ---
         this.knowledgeBase = {};
 
         // --- СТАТИСТИКА ---
@@ -47,16 +47,37 @@ class MyNeuralNetwork {
             lastLoss: 0,
             lastActivity: Date.now(),
             boredom: 0,
-            thinkingMode: true  // Режим "думания"
+            thinkingMode: true
         };
 
         // --- РЕЖИМ ДУМАНИЯ ---
-        this.thinkingTime = 2000; // 2 секунды "думания" перед ответом
+        this.thinkingTime = 2000;
         this.lastThinkTime = 0;
 
         this.initAlphabet();
         this.initNetwork();
         this.loadKnowledgeBase();
+    }
+
+    // ==========================================
+    // СТАТИСТИКА И РЕЖИМЫ (ПРАВИЛЬНОЕ МЕСТО)
+    // ==========================================
+
+    getStats() {
+        return {
+            learned: this.stats.learned,
+            totalCharsProcessed: this.stats.totalCharsProcessed,
+            lastLoss: this.stats.lastLoss,
+            thinkingMode: this.stats.thinkingMode,
+            lastActivity: this.stats.lastActivity,
+            knowledgeSize: Object.keys(this.knowledgeBase).length
+        };
+    }
+
+    toggleThinkingMode() {
+        this.stats.thinkingMode = !this.stats.thinkingMode;
+        this.saveStats();
+        return this.stats.thinkingMode;
     }
 
     // ==========================================
@@ -77,13 +98,12 @@ class MyNeuralNetwork {
     }
 
     // ==========================================
-    // СБРОС ПАМЯТИ (полная перезагрузка мозга)
+    // СБРОС ПАМЯТИ
     // ==========================================
 
     resetMemory() {
         console.log("🧹 ПРОИЗВОДИТСЯ ПОЛНАЯ ОЧИСТКА ПАМЯТИ...");
         
-        // Удаляем файлы весов и памяти
         if (fs.existsSync(this.weightsFile)) {
             fs.unlinkSync(this.weightsFile);
         }
@@ -94,7 +114,6 @@ class MyNeuralNetwork {
             fs.unlinkSync(this.knowledgeFile);
         }
         
-        // Сбрасываем статистику
         this.stats = {
             learned: 0,
             totalCharsProcessed: 0,
@@ -104,13 +123,10 @@ class MyNeuralNetwork {
             thinkingMode: true
         };
         
-        // Очищаем базу знаний
         this.knowledgeBase = {};
-        
-        // Пересоздаем сеть с нуля
         this.createNewNetwork();
         
-        console.log("✨ ПАМЯТЬ ПОЛНОСТЬЮ ОЧИЩЕНА! Мозг как у новорожденного.");
+        console.log("✨ ПАМЯТЬ ПОЛНОСТЬЮ ОЧИЩЕНА!");
         return "🧠 Память полностью очищена! Я начинаю обучение с нуля.";
     }
 
@@ -146,8 +162,21 @@ class MyNeuralNetwork {
         console.log('✨ Нейросеть инициализирована');
     }
 
+    initAdamCache() {
+        this.adam.mWxh = this.createZeroMatrix(this.hiddenSize, this.inputSize);
+        this.adam.vWxh = this.createZeroMatrix(this.hiddenSize, this.inputSize);
+        this.adam.mWhh = this.createZeroMatrix(this.hiddenSize, this.hiddenSize);
+        this.adam.vWhh = this.createZeroMatrix(this.hiddenSize, this.hiddenSize);
+        this.adam.mWhy = this.createZeroMatrix(this.outputSize, this.hiddenSize);
+        this.adam.vWhy = this.createZeroMatrix(this.outputSize, this.hiddenSize);
+        this.adam.mbh = new Array(this.hiddenSize).fill(0);
+        this.adam.vbh = new Array(this.hiddenSize).fill(0);
+        this.adam.mby = new Array(this.outputSize).fill(0);
+        this.adam.vby = new Array(this.outputSize).fill(0);
+    }
+
     // ==========================================
-    // БАЗА ЗНАНИЙ (быстрый доступ к изученному)
+    // БАЗА ЗНАНИЙ
     // ==========================================
 
     loadKnowledgeBase() {
@@ -162,7 +191,6 @@ class MyNeuralNetwork {
     }
 
     saveKnowledgeBase() {
-        // Ограничиваем размер базы знаний (храним только частые паттерны)
         const entries = Object.entries(this.knowledgeBase);
         if (entries.length > 1000) {
             entries.sort((a, b) => b[1].count - a[1].count);
@@ -174,10 +202,8 @@ class MyNeuralNetwork {
     learnFromText(text, source = "user") {
         if (!text || text.length < 5) return false;
         
-        // Очищаем и нормализуем текст
         const cleanText = text.toLowerCase().replace(/[^\w\s.,!?\-]/g, ' ').substring(0, 500);
         
-        // Сохраняем в базу знаний для быстрых ответов
         const words = cleanText.split(/\s+/);
         for (let i = 0; i < words.length - 2; i++) {
             const phrase = words.slice(i, i + 3).join(' ');
@@ -191,7 +217,6 @@ class MyNeuralNetwork {
             }
         }
         
-        // Обучаем нейросеть
         this.learn(cleanText, 15);
         this.saveKnowledgeBase();
         
@@ -199,7 +224,7 @@ class MyNeuralNetwork {
     }
 
     // ==========================================
-    // РЕЖИМ ДУМАНИЯ (задержка перед ответом)
+    // РЕЖИМ ДУМАНИЯ
     // ==========================================
 
     async think(question) {
@@ -207,17 +232,13 @@ class MyNeuralNetwork {
             return this.generateAnswer(question);
         }
         
-        // Имитация процесса "думания"
         console.log("🤔 Мозг анализирует запрос...");
         
-        // Анализируем сложность вопроса
         const complexity = Math.min(question.length / 50, 3);
         const thinkDelay = this.thinkingTime * (0.5 + complexity);
         
-        // Ждем (думаем)
         await this.sleep(thinkDelay);
         
-        // Генерируем ответ
         const answer = this.generateAnswer(question);
         
         console.log(`💭 Думал ${(thinkDelay/1000).toFixed(1)} секунд`);
@@ -225,17 +246,14 @@ class MyNeuralNetwork {
     }
 
     generateAnswer(question) {
-        // Пытаемся найти похожий паттерн в базе знаний
         const words = question.toLowerCase().split(/\s+/);
         for (let i = 0; i < words.length - 2; i++) {
             const phrase = words.slice(i, i + 3).join(' ');
             if (this.knowledgeBase[phrase] && this.knowledgeBase[phrase].count > 2) {
-                // Нашли знакомую фразу, генерируем на её основе
                 return this.generateFromPattern(phrase);
             }
         }
         
-        // Иначе генерируем нейросетью
         return this.generate(100);
     }
 
@@ -251,7 +269,6 @@ class MyNeuralNetwork {
             const nextWords = this.knowledgeBase[current].next;
             if (Object.keys(nextWords).length === 0) break;
             
-            // Выбираем наиболее вероятное продолжение
             const total = Object.values(nextWords).reduce((a, b) => a + b, 0);
             let rand = Math.random() * total;
             let selected = '';
@@ -278,7 +295,7 @@ class MyNeuralNetwork {
     }
 
     // ==========================================
-    // ОСНОВНОЕ ОБУЧЕНИЕ НЕЙРОСЕТИ
+    // ОСНОВНОЕ ОБУЧЕНИЕ
     // ==========================================
 
     learn(text, epochs = 15) {
@@ -292,8 +309,6 @@ class MyNeuralNetwork {
                 inputs.push(this.charToIdx[char]);
             } else if (this.charToIdx[' '] !== undefined) {
                 inputs.push(this.charToIdx[' ']);
-            } else {
-                continue;
             }
         }
 
@@ -309,7 +324,6 @@ class MyNeuralNetwork {
             
             hs[-1] = new Array(this.hiddenSize).fill(0);
 
-            // Forward pass
             for (let t = 0; t < inputs.length - 1; t++) {
                 xs[t] = new Array(this.inputSize).fill(0);
                 xs[t][inputs[t]] = 1;
@@ -337,7 +351,6 @@ class MyNeuralNetwork {
                 totalLoss -= Math.log(Math.max(ps[t][targetIdx], 1e-15));
             }
 
-            // Backward pass
             const dWxh = this.createZeroMatrix(this.hiddenSize, this.inputSize);
             const dWhh = this.createZeroMatrix(this.hiddenSize, this.hiddenSize);
             const dWhy = this.createZeroMatrix(this.outputSize, this.hiddenSize);
@@ -490,7 +503,6 @@ class MyNeuralNetwork {
         const biasCorrection2 = 1 - Math.pow(beta2, t);
         const lrStep = this.learningRate * Math.sqrt(biasCorrection2) / biasCorrection1;
 
-        // Update Wxh
         for (let i = 0; i < this.hiddenSize; i++) {
             for (let j = 0; j < this.inputSize; j++) {
                 this.adam.mWxh[i][j] = beta1 * this.adam.mWxh[i][j] + (1 - beta1) * dWxh[i][j];
@@ -499,7 +511,6 @@ class MyNeuralNetwork {
             }
         }
 
-        // Update Whh
         for (let i = 0; i < this.hiddenSize; i++) {
             for (let j = 0; j < this.hiddenSize; j++) {
                 this.adam.mWhh[i][j] = beta1 * this.adam.mWhh[i][j] + (1 - beta1) * dWhh[i][j];
@@ -508,7 +519,6 @@ class MyNeuralNetwork {
             }
         }
 
-        // Update Why
         for (let i = 0; i < this.outputSize; i++) {
             for (let j = 0; j < this.hiddenSize; j++) {
                 this.adam.mWhy[i][j] = beta1 * this.adam.mWhy[i][j] + (1 - beta1) * dWhy[i][j];
@@ -517,7 +527,6 @@ class MyNeuralNetwork {
             }
         }
 
-        // Update biases
         for (let i = 0; i < this.hiddenSize; i++) {
             this.adam.mbh[i] = beta1 * this.adam.mbh[i] + (1 - beta1) * dbh[i];
             this.adam.vbh[i] = beta2 * this.adam.vbh[i] + (1 - beta2) * dbh[i] * dbh[i];
@@ -555,13 +564,4 @@ class MyNeuralNetwork {
             }
             h = nextH;
 
-            const y = new Array(this.outputSize);
-            for (let i = 0; i < this.outputSize; i++) {
-                let sum = this.by[i];
-                for (let j = 0; j < this.hiddenSize; j++) {
-                    sum += this.Why[i][j] * h[j];
-                }
-                y[i] = sum;
-            }
-
-            const softProbs = this.getTemperatureSoftmax(y,
+            const y = new A
