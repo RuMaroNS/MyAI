@@ -29,8 +29,8 @@ class MyNeuralNetwork {
     this.init();
   }
   
-  init() {
-    // Загружаем веса нейросети если есть
+    init() {
+    // 1. Сначала загружаем или создаем веса
     if (fs.existsSync('network_weights.json')) {
       const saved = JSON.parse(fs.readFileSync('network_weights.json', 'utf8'));
       this.Wxh = saved.Wxh;
@@ -41,14 +41,26 @@ class MyNeuralNetwork {
       this.vocabSize = saved.vocabSize;
       console.log('🧠 Нейросеть загружена');
     } else {
-      // Создаём случайную нейросеть
       this.Wxh = this.randomMatrix(this.hiddenSize, this.inputSize);
       this.Whh = this.randomMatrix(this.hiddenSize, this.hiddenSize);
       this.Why = this.randomMatrix(this.outputSize, this.hiddenSize);
       console.log('✨ Создана новая нейросеть');
     }
+
+    // 2. ВАЖНО: Добавляем алфавит сюда, внутри init!
+    const alphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяabcdefghijklmnopqrstuvwxyz0123456789 .,!?";
+    for(let char of alphabet) {
+        if(this.charToIdx[char] === undefined) {
+            let idx = Object.keys(this.charToIdx).length;
+            if(idx < this.inputSize) {
+                this.charToIdx[char] = idx;
+                this.idxToChar[idx] = char;
+            }
+        }
+    }
+    this.vocabSize = Object.keys(this.charToIdx).length;
     
-    // Загружаем статистику (скука, обученность)
+    // Загружаем статистику
     if (fs.existsSync(this.memoryFile)) {
       const mem = JSON.parse(fs.readFileSync(this.memoryFile, 'utf8'));
       this.stats = mem.stats || this.stats;
@@ -56,6 +68,7 @@ class MyNeuralNetwork {
     
     this.resetState();
   }
+
   
   randomMatrix(rows, cols) {
     const m = [];
@@ -176,18 +189,6 @@ class MyNeuralNetwork {
     }
     console.log(`📖 Словарь: ${this.vocabSize} символов`);
   }
-
-  // Добавь это в buildVocab или при создании сети
-const alphabet = "абвгдеёжзийклмнопрстуфхцчшщъыьэюяabcdefghijklmnopqrstuvwxyz0123456789 .,!?";
-for(let char of alphabet) {
-    if(this.charToIdx[char] === undefined) {
-        let idx = Object.keys(this.charToIdx).length;
-        if(idx < this.inputSize) {
-            this.charToIdx[char] = idx;
-            this.idxToChar[idx] = char;
-        }
-    }
-}
   
   
   // ГЕНЕРАЦИЯ ТЕКСТА (как ребёнок)
