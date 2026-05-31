@@ -1,41 +1,41 @@
 const { Telegraf } = require('telegraf');
-const brain = require('./MyNeuralNetwork'); // Подключаем твой новый файл
+const brain = require('./MyNeuralNetwork');
+
+// Инициализация бота. Токен берется из переменных окружения Github Actions
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const MY_ID = 6176762600;
-
-// Периодическая проверка "скуки" (автономная жизнь)
-setInterval(async () => {
-    if (brain.shouldWrite()) {
-        const msg = `Слушай... ${brain.generate('привет', 40)}`;
-        await bot.telegram.sendMessage(MY_ID, msg);
-        brain.resetBoredom();
-    }
-}, 600000); // Проверка каждые 10 минут
 
 bot.on('text', async (ctx) => {
     if (ctx.from.id !== MY_ID) return;
     
-    brain.resetBoredom();
     const text = ctx.message.text;
+    brain.resetBoredom();
 
-    // 1. Если это ссылка - учимся глубоко
+    // Если отправлена ссылка - обучаемся на ее контенте
     if (text.match(/https?:\/\/[^\s]+/g)) {
-        await ctx.reply("📚 Читаю и учусь...");
+        await ctx.reply("📖 Произвожу парсинг структуры документа...");
         const urls = text.match(/https?:\/\/[^\s]+/g);
+        let success = false;
         for (let url of urls) {
-            await brain.readUrl(url); // Внутри readUrl у тебя уже есть learn()
+            const ok = await brain.readUrl(url);
+            if (ok) success = true;
         }
-        await ctx.reply("✅ Готово! Я стал немного умнее.");
+        if (success) {
+            await ctx.reply("✅ Матрицы скорректированы на основе внешнего источника.");
+        } else {
+            await ctx.reply("❌ Не удалось прочесть ссылку.");
+        }
         return;
     }
 
-    // 2. Если это обычный текст - учимся и отвечаем
-    // Учимся агрессивно (50 раз на одно сообщение), чтобы он запоминал
-    brain.learn(text, 50); 
+    // Обучаем сеть на вводе (25 эпох BPTT градиентного спуска)
+    brain.learn(text, 25);
+
+    // ГЕНЕРАЦИЯ: Полная автономия. Бот сам решает, с какого случайного символа начать генерировать
+    const answer = brain.generate(80); 
     
-    // Генерируем ответ
-    const answer = brain.generate(text.slice(0, 10), 50);
-    ctx.reply(answer || "...");
+    // Ответ пользователю
+    await ctx.reply(answer || "...");
 });
 
-bot.launch();
+bot.launch().then(() => console.log("🚀 Полноценное ИИ-ядро успешно запущено в автономном режиме."));
