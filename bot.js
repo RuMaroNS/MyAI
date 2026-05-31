@@ -1,41 +1,114 @@
 const { Telegraf } = require('telegraf');
 const brain = require('./MyNeuralNetwork');
 
-// Инициализация бота. Токен берется из переменных окружения Github Actions
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const MY_ID = 6176762600;
 
+// Обработчик ошибок (чтобы бот не падал)
+bot.catch((err, ctx) => {
+    console.error('Ошибка:', err);
+    ctx.reply('⚠️ Ошибка, но я жив. Попробуйте ещё раз.');
+});
+
+// Команда /reset - полная очистка памяти
+bot.command('reset', async (ctx) => {
+    if (ctx.from.id !== MY_ID) {
+        await ctx.reply('⛔ У вас нет прав на эту команду.');
+        return;
+    }
+    
+    await ctx.reply('🧹 Очищаю память... Подождите...');
+    const result = brain.resetMemory();
+    await ctx.reply(result);
+    await ctx.reply('💡 Теперь я как новорожденный! Обучайте меня заново.');
+    await ctx.reply('📚 Отправьте мне текст или ссылку для обучения.');
+});
+
+// Команда /stats - статистика мозга
+bot.command('stats', async (ctx) => {
+    if (ctx.from.id !== MY_ID) return;
+    
+    const stats = brain.getStats();
+    await ctx.reply(`
+📊 **Статистика нейросети**
+━━━━━━━━━━━━━━━━
+🧠 Обучений: ${stats.learned}
+📝 Символов обработано: ${stats.totalCharsProcessed}
+📉 Последняя ошибка (loss): ${stats.lastLoss.toFixed(4)}
+💭 Режим "думания": ${stats.thinkingMode ? 'Включен' : 'Выключен'}
+⏱️ Последняя активность: ${new Date(stats.lastActivity).toLocaleTimeString()}
+    `);
+});
+
+// Команда /think - включить/выключить режим думания
+bot.command('think', async (ctx) => {
+    if (ctx.from.id !== MY_ID) return;
+    
+    const mode = brain.toggleThinkingMode();
+    await ctx.reply(mode ? '🤔 Режим "думания" ВКЛЮЧЕН (буду думать перед ответом)' : '⚡ Режим "думания" ВЫКЛЮЧЕН (отвечаю мгновенно)');
+});
+
+// Обработка текста с индикатором "печатает..."
 bot.on('text', async (ctx) => {
     if (ctx.from.id !== MY_ID) return;
     
     const text = ctx.message.text;
     brain.resetBoredom();
 
-    // Если отправлена ссылка - обучаемся на ее контенте
+    // Обработка ссылок
     if (text.match(/https?:\/\/[^\s]+/g)) {
-        await ctx.reply("📖 Произвожу парсинг структуры документа...");
+        const msg = await ctx.reply('📖 Анализирую содержимое ссылки... Подождите.');
         const urls = text.match(/https?:\/\/[^\s]+/g);
         let success = false;
+        
         for (let url of urls) {
             const ok = await brain.readUrl(url);
             if (ok) success = true;
         }
+        
         if (success) {
-            await ctx.reply("✅ Матрицы скорректированы на основе внешнего источника.");
+            await ctx.telegram.editMessageText(msg.chat.id, msg.message_id, null, '✅ Ссылка успешно обработана! Мозг обновлен.');
         } else {
-            await ctx.reply("❌ Не удалось прочесть ссылку.");
+            await ctx.telegram.editMessageText(msg.chat.id, msg.message_id, null, '❌ Не удалось прочитать ссылку. Возможно, сайт защищен.');
         }
         return;
     }
 
-    // Обучаем сеть на вводе (25 эпох BPTT градиентного спуска)
-    brain.learn(text, 25);
-
-    // ГЕНЕРАЦИЯ: Полная автономия. Бот сам решает, с какого случайного символа начать генерировать
-    const answer = brain.generate(80); 
+    // Имитация "печатает..."
+    await ctx.sendChatAction('typing');
     
-    // Ответ пользователю
-    await ctx.reply(answer || "...");
+    // Бот "думает" (с задержкой или без)
+    const answer = await brain.think(text);
+    
+    // Отправляем ответ
+    await ctx.reply(answer);
 });
 
-bot.launch().then(() => console.log("🚀 Полноценное ИИ-ядро успешно запущено в автономном режиме."));
+// Команда /help
+bot.command('help', async (ctx) => {
+    if (ctx.from.id !== MY_ID) return;
+    
+    await ctx.reply(`
+🤖 **Команды бота:**
+━━━━━━━━━━━━━━━━━━━━
+/reset - Полная очистка памяти
+/stats - Показать статистику мозга
+/think - Вкл/Выкл режим "думания"
+/help - Эта справка
+
+📝 **Как использовать:**
+• Отправьте обычный текст — я научусь и отвечу
+• Отправьте ссылку — я прочитаю и обучусь
+• Чем больше общаетесь, тем умнее я становлюсь
+    `);
+});
+
+// Запуск
+bot.launch().then(() => {
+    console.log('🚀 Бот запущен');
+    console.log('🤖 Доступные команды: /reset, /stats, /think, /help');
+});
+
+// Graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
