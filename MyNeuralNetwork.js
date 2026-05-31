@@ -681,10 +681,66 @@ class MyNeuralNetwork {
         }
     }
 
-    resetBoredom() {
+        resetBoredom() {
         this.stats.boredom = 0;
         this.stats.lastActivity = Date.now();
         this.saveStats();
+    }
+
+    // ==========================================
+    // УМНЫЙ ОТВЕТ НА ВОПРОСЫ (внутри класса!)
+    // ==========================================
+
+    generateSmartResponse(question) {
+        const q = question.toLowerCase();
+        
+        if (q.includes('как дела') || q.includes('как сам') || q.includes('как ты')) {
+            return this.getRandomResponse(['Хорошо, а у тебя?', 'Нормально, спасибо!', 'Отлично! Как сам?', 'Всё пучком!']);
+        }
+        
+        if (q.includes('кто ты') || q.includes('твое имя') || q.includes('зовут')) {
+            return this.getRandomResponse(['Я нейросетевой бот', 'Меня зовут AI Bot', 'Я твой виртуальный друг']);
+        }
+        
+        if (q.includes('спасибо') || q.includes('благодарю')) {
+            return 'Пожалуйста! Обращайся :)';
+        }
+        
+        if (q.includes('привет') || q.includes('здравствуй') || q.includes('хай')) {
+            return this.getRandomResponse(['Привет!', 'Здравствуй!', 'Хай!', 'Приветствую!']);
+        }
+        
+        if (q.includes('пока') || q.includes('до свидания') || q.includes('увидимся')) {
+            return 'Пока! Было приятно пообщаться!';
+        }
+        
+        if (q.includes('что ты умеешь')) {
+            return 'Я умею учиться на текстах, парсить ссылки и отвечать на вопросы! Напиши /help чтобы узнать больше.';
+        }
+        
+        const words = q.split(/\s+/);
+        for (let i = 0; i < words.length - 1; i++) {
+            const phrase = words.slice(i, i + 2).join(' ');
+            if (this.knowledgeBase[phrase]) {
+                return this.generateFromPattern(phrase);
+            }
+        }
+        
+        const generated = this.generate(50);
+        if (generated.length > 5) {
+            return generated;
+        }
+        
+        return this.getRandomResponse([
+            'Интересный вопрос... Продолжай, я учусь!',
+            'Я пока не совсем понял, но стараюсь!',
+            'Расскажи ещё что-нибудь, я научусь отвечать лучше.',
+            'Мой мозг ещё маленький, но я расту!'
+        ]);
+    }
+
+    getRandomResponse(responses) {
+        return responses[Math.floor(Math.random() * responses.length)];
     }
 }
 
