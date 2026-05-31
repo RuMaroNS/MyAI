@@ -4,60 +4,50 @@ const brain = require('./MyNeuralNetwork');
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const MY_ID = 6176762600;
 
-// Обработчик ошибок (чтобы бот не падал)
+// Обработчик ошибок
 bot.catch((err, ctx) => {
     console.error('Ошибка:', err);
-    ctx.reply('⚠️ Ошибка, но я жив. Попробуйте ещё раз.');
+    ctx.reply('⚠️ Ошибка, но я жив.');
 });
 
-// Команда /reset - полная очистка памяти
+// Команда /reset - очистка памяти
 bot.command('reset', async (ctx) => {
-    if (ctx.from.id !== MY_ID) {
-        await ctx.reply('⛔ У вас нет прав на эту команду.');
-        return;
-    }
-    
-    await ctx.reply('🧹 Очищаю память... Подождите...');
+    if (ctx.from.id !== MY_ID) return;
+    await ctx.reply('🧹 Очищаю память...');
     const result = brain.resetMemory();
     await ctx.reply(result);
-    await ctx.reply('💡 Теперь я как новорожденный! Обучайте меня заново.');
-    await ctx.reply('📚 Отправьте мне текст или ссылку для обучения.');
 });
 
-// Команда /stats - статистика мозга
+// Команда /stats
 bot.command('stats', async (ctx) => {
     if (ctx.from.id !== MY_ID) return;
-    
     const stats = brain.getStats();
     await ctx.reply(`
-📊 **Статистика нейросети**
-━━━━━━━━━━━━━━━━
+📊 **Статистика**
+━━━━━━━━━━
 🧠 Обучений: ${stats.learned}
-📝 Символов обработано: ${stats.totalCharsProcessed}
-📉 Последняя ошибка (loss): ${stats.lastLoss.toFixed(4)}
-💭 Режим "думания": ${stats.thinkingMode ? 'Включен' : 'Выключен'}
-⏱️ Последняя активность: ${new Date(stats.lastActivity).toLocaleTimeString()}
+📝 Символов: ${stats.totalCharsProcessed}
+💭 Режим думания: ${stats.thinkingMode ? 'Вкл' : 'Выкл'}
+📚 База знаний: ${stats.knowledgeSize} фраз
     `);
 });
 
-// Команда /think - включить/выключить режим думания
+// Команда /think
 bot.command('think', async (ctx) => {
     if (ctx.from.id !== MY_ID) return;
-    
     const mode = brain.toggleThinkingMode();
-    await ctx.reply(mode ? '🤔 Режим "думания" ВКЛЮЧЕН (буду думать перед ответом)' : '⚡ Режим "думания" ВЫКЛЮЧЕН (отвечаю мгновенно)');
+    await ctx.reply(mode ? '🤔 Режим думания ВКЛЮЧЕН' : '⚡ Режим думания ВЫКЛЮЧЕН');
 });
 
-// Обработка текста с индикатором "печатает..."
+// Главный обработчик текста
 bot.on('text', async (ctx) => {
     if (ctx.from.id !== MY_ID) return;
     
     const text = ctx.message.text;
-    brain.resetBoredom();
-
-    // Обработка ссылок
+    
+    // Парсинг ссылок
     if (text.match(/https?:\/\/[^\s]+/g)) {
-        const msg = await ctx.reply('📖 Анализирую содержимое ссылки... Подождите.');
+        const msg = await ctx.reply('📖 Обрабатываю ссылку...');
         const urls = text.match(/https?:\/\/[^\s]+/g);
         let success = false;
         
@@ -67,48 +57,34 @@ bot.on('text', async (ctx) => {
         }
         
         if (success) {
-            await ctx.telegram.editMessageText(msg.chat.id, msg.message_id, null, '✅ Ссылка успешно обработана! Мозг обновлен.');
+            await ctx.telegram.editMessageText(msg.chat.id, msg.message_id, null, '✅ Ссылка обработана! Мозг обновлен.');
         } else {
-            await ctx.telegram.editMessageText(msg.chat.id, msg.message_id, null, '❌ Не удалось прочитать ссылку. Возможно, сайт защищен.');
+            await ctx.telegram.editMessageText(msg.chat.id, msg.message_id, null, '❌ Не удалось прочитать ссылку.');
         }
         return;
     }
-
-    // Имитация "печатает..."
+    
+    // Обучаемся на сообщении пользователя
+    brain.learnFromText(text, "user");
+    
+    // Индикатор "печатает"
     await ctx.sendChatAction('typing');
     
-    // Бот "думает" (с задержкой или без)
-    const answer = await brain.think(text);
+    // Думаем (если режим включен)
+    if (brain.stats.thinkingMode) {
+        await brain.sleep(1500);
+    }
     
-    // Отправляем ответ
+    // Генерируем ОТВЕТ, а не случайный текст
+    const answer = brain.generateSmartResponse(text);
+    
     await ctx.reply(answer);
 });
 
-// Команда /help
-bot.command('help', async (ctx) => {
-    if (ctx.from.id !== MY_ID) return;
-    
-    await ctx.reply(`
-🤖 **Команды бота:**
-━━━━━━━━━━━━━━━━━━━━
-/reset - Полная очистка памяти
-/stats - Показать статистику мозга
-/think - Вкл/Выкл режим "думания"
-/help - Эта справка
-
-📝 **Как использовать:**
-• Отправьте обычный текст — я научусь и отвечу
-• Отправьте ссылку — я прочитаю и обучусь
-• Чем больше общаетесь, тем умнее я становлюсь
-    `);
-});
-
-// Запуск
 bot.launch().then(() => {
     console.log('🚀 Бот запущен');
-    console.log('🤖 Доступные команды: /reset, /stats, /think, /help');
+    console.log('🤖 Режим диалога АКТИВЕН');
 });
 
-// Graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
